@@ -42,3 +42,9 @@ repos:
     rev: v0.10.0.1
     hooks:
       - id: shellcheck           # bash script linting (Phase 1 scripts)
+
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.35.1
+    hooks:
+      - id: yamllint
+        args: [--strict]
