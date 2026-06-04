@@ -1,0 +1,29 @@
+# ══════════════════════════════════════════════════════════
+# WHAT:      Runs automated checks on code before allowing a git commit to succeed.
+# WHY:       Catches trailing whitespace, broken YAML, and leaked secrets locally, saving CI/CD compute minutes.
+# BUSINESS:  Prevents AWS credential leaks which can cost a startup thousands of dollars in minutes.
+# ENGINEER:  Shifts security and formatting "left" — fixing problems at the developer's laptop instead of in the cloud.
+# RECRUITER: Demonstrates mature DevSecOps practices and automation-first thinking.
+# ══════════════════════════════════════════════════════════
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-merge-conflict
+
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+
+
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v3.1.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]

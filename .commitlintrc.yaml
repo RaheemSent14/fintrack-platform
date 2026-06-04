@@ -1,0 +1,19 @@
+# ══════════════════════════════════════════════════════════
+# WHAT:      Enforces "Conventional Commits" format for all commit messages.
+# WHY:       Standardizes git history, enabling automated changelog generation and semantic versioning.
+# BUSINESS:  Speeds up incident response. When production breaks, readable git logs help find the offending code faster.
+# ENGINEER:  Forces discipline. You must categorize your work (feat, fix, infra, sec).
+# RECRUITER: Shows you write code meant to be read by a team, not just by yourself.
+# ══════════════════════════════════════════════════════════
+# VALID:   feat: add user authentication module
+# VALID:   infra(terraform): add vpc module with public subnets
+# INVALID: added some stuff for the network
+# ══════════════════════════════════════════════════════════
+
+extends:
+  - "@commitlint/config-conventional"
+rules:
+  type-enum:
+    - 2
+    - always
+    - [feat, fix, infra, ci, sec, obs, docs, chore, refactor]
