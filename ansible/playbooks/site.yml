@@ -1,0 +1,17 @@
+---
+# WHAT: The main playbook entry point for the FinTrack infrastructure.
+# WHY: This creates a single source of truth for the cluster configuration.
+# BUSINESS: Orchestrates the entire deployment; one command to configure the fleet.
+# ENGINEER: Targets 'all' hosts using the 'common' role with sudo privileges.
+# RECRUITER: Demonstrates an understanding of top-level orchestration.
+# WHAT: Updated orchestration entry point.
+# WHY: Includes the new 'server-hardening' role in the execution sequence.
+# BUSINESS: Orchestrates the entire deployment; one command to configure the fleet.
+# ENGINEER: Targets 'all' hosts using both 'common' and 'server-hardening' roles.
+
+- name: Configure FinTrack Infrastructure
+  hosts: all
+  become: yes
+  roles:
+    - common
+    - server-hardening

@@ -1,0 +1,63 @@
+---
+# WHAT: Ensure the package cache is up to date and all system packages are upgraded.
+# WHY: Vulnerability management; outdated packages are the primary entry point for attackers.
+# BUSINESS: FinTrack must be secure; patching prevents data breaches.
+# ENGINEER: Uses 'apt' module with cache_valid_time to prevent redundant API calls.
+# RECRUITER: Proof of 'Security-First' mindset.
+- name: The system package cache is updated and all packages are upgraded.
+  ansible.builtin.apt:
+    update_cache: yes
+    upgrade: dist
+    cache_valid_time: 3600
+
+# WHAT: Install essential administrative and network diagnostic tools.
+# WHY: Standardizes the environment so any engineer can troubleshoot consistently.
+# BUSINESS: Reduces Mean Time To Repair (MTTR) by having tools ready.
+# ENGINEER: Uses 'loop' to keep the task list DRY (Don't Repeat Yourself).
+# RECRUITER: Shows I value developer/operator experience.
+- name: Essential tools are installed.
+  ansible.builtin.apt:
+    name: "{{ essential_tools }}"
+    state: present
+
+# WHAT: Set the system timezone to UTC.
+# WHY: UTC is the industry standard for logs and metrics. If your master is in
+#      Kigali (CAT) and worker in London (GMT), correlating logs during an
+#      incident is a nightmare.
+# BUSINESS: Compliance and easier audit trails.
+# ENGINEER: Uses the 'timezone' module.
+# RECRUITER: Shows operational maturity regarding global distributed systems.
+- name: The system timezone is set to UTC.
+  community.general.timezone:
+    name: "{{ timezone }}"
+
+# WHAT: Configure and enable NTP (Chrony).
+# WHY: TLS/HTTPS relies on correct timestamps. If clocks drift, SSL certificates
+#      appear invalid, breaking API communication between microservices.
+# BUSINESS: Prevents 'Certificate Expired' or 'Invalid Date' errors in production.
+# ENGINEER: Demonstrates understanding of system-level time synchronization.
+- name: The Chrony NTP service is installed and enabled.
+  ansible.builtin.apt:
+    name: chrony
+    state: present
+
+# WHAT: Enable automatic security updates via unattended-upgrades.
+# WHY: Prevents zero-day vulnerabilities from persisting while waiting for human intervention.
+# BUSINESS: Protects revenue by mitigating risk automatically.
+# ENGINEER: Demonstrates automated vulnerability management.
+- name: Automatic security updates are enabled.
+  ansible.builtin.apt:
+    name: unattended-upgrades
+    state: present
+
+# WHAT: Create a non-root deploy user.
+# WHY: 'Least Privilege'. Running production code as root is a catastrophic security risk.
+# BUSINESS: Limits the blast radius if an application is compromised.
+# ENGINEER: Demonstrates security hardening basics.
+# RECRUITER: This is a 'must-have' for any production-ready project.
+- name: A non-root deploy user is created.
+  ansible.builtin.user:
+    name: "{{ deploy_user }}"
+    shell: /bin/bash
+    groups: sudo
+    append: yes

@@ -1,0 +1,35 @@
+# WHAT: Dynamic inventory configuration for AWS.
+# WHY: Decouples infrastructure lifecycle from configuration management.
+#      If you tear down the cluster and rebuild, IPs change, but this plugin
+#      fetches the correct IPs automatically.
+# BUSINESS: Eliminates manual operational overhead; allows FinTrack to scale
+#           instances without updating inventory files.
+# ENGINEER: Demonstrates use of the 'aws_ec2' inventory plugin which offloads
+#           inventory management to the Cloud Provider API.
+# RECRUITER: Look for this—it proves I can manage cloud-native environments
+#            where hardcoded IP addresses are a 'red flag' anti-pattern.
+
+plugin: aws_ec2
+regions:
+  - us-east-1
+
+# WHAT: Only discover instances with specific tags.
+# WHY: Security/Isolation. Ensures we only manage our specific FinTrack
+#      environment, not other random AWS resources in your account.
+filters:
+  tag:Project: fintrack
+  instance-state-name: running
+
+# WHAT: Automatically group instances by the 'Role' tag.
+# WHY: Allows us to target playbooks (e.g., install k3s-master only on master nodes).
+# FIX: Updated from 'tags.Role' to 'ec2_tags.Role' to resolve deprecation warning.
+keyed_groups:
+  - key: ec2_tags.Role
+    prefix: role
+    separator: ""
+
+# WHAT: Connect using private IP for internal traffic if applicable,
+#       or public for external access.
+# WHY: Since we are connecting from your laptop, we must use public IPs.
+compose:
+  ansible_host: public_ip_address

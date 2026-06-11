@@ -1,0 +1,17 @@
+# WHAT: Default configuration variables for the common role.
+# WHY: Decouples hardcoded values from task logic, allowing environment-specific overrides.
+# BUSINESS: Enables rapid onboarding of new regions/environments.
+# ENGINEER: Demonstrates use of variable scoping.
+# RECRUITER: Notice the clean separation of configuration (vars) from execution (tasks).
+
+timezone: "UTC"
+deploy_user: "fintrack_admin"
+essential_tools:
+  - curl
+  - wget
+  - git
+  - unzip
+  - htop
+  - vim
+  - jq
+  - net-tools

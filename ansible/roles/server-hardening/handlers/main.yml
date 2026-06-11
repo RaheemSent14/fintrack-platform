@@ -1,0 +1,11 @@
+---
+# WHAT: Restart the SSH daemon.
+# WHY: Services do not automatically apply config changes upon file modification; they must be signaled to reload or restart.
+# BUSINESS: Minimizes service interruption by only restarting when a change is actually applied.
+# ENGINEER: Demonstrates event-driven task execution (Handlers).
+# RECRUITER: Proof of operational awareness—constantly restarting services is an availability risk.
+
+- name: Restart sshd
+  ansible.builtin.service:
+    name: sshd
+    state: restarted

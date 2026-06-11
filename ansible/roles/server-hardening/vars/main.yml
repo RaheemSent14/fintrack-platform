@@ -1,0 +1,3 @@
+# WHAT: Variable definitions for the server hardening role.
+# WHY: Keeps sensitive or environment-specific data out of the task logic.
+management_cidr: "41.173.32.141/32"

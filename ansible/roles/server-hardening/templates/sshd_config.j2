@@ -1,0 +1,28 @@
+# WHAT: Hardened SSH configuration template.
+# WHY: Disables insecure auth methods; creates a predictable security baseline.
+# BUSINESS: Prevents account takeover attacks (Brute-Force/Credential Stuffing).
+# ENGINEER: Disables root login and passwords, requiring SSH keys for access.
+
+# Disable root login to prevent brute-force attacks targeting the root account.
+PermitRootLogin no
+
+# Disable password authentication; force use of SSH keys (preventing dictionary attacks).
+PasswordAuthentication no
+
+# Limit auth attempts to 3; disconnect after 3 failed tries to mitigate automated scanners.
+MaxAuthTries 3
+
+# Disable X11 Forwarding to prevent potential local-to-remote display hijacking.
+X11Forwarding no
+
+# Only allow the specific deploy user to access the machine (Principle of Least Privilege).
+AllowUsers {{ deploy_user }}
+
+# Keep connections alive; drop idle sessions to prevent 'zombie' connections.
+ClientAliveInterval 300
+
+# Enforce protocol 2 (SSH-2) which is the modern standard.
+Protocol 2
+
+# Required for SSH functionality
+UsePAM yes
