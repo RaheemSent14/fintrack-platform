@@ -163,3 +163,33 @@ resource "aws_iam_instance_profile" "ec2_profile" {
   name = "fintrack-ec2-profile-${var.environment}"
   role = aws_iam_role.ec2_role.name
 }
+
+# ---------------------------------------------------------
+# SSM TRANSIT BUCKET ACCESS (Ansible over SSM)
+# ---------------------------------------------------------
+# WHAT — Grants the EC2 instances minimal access to the SSM transit S3 bucket.
+# WHY — The instances need to download (GetObject) and verify (ListBucket) the Ansible payloads, and return execution results (PutObject).
+# BUSINESS — Adheres to least privilege. If an instance is compromised, the attacker only gets access to ephemeral transit scripts, not the entire AWS account.
+# ENGINEER — Scoping S3 permissions by exact ARN rather than resource "*" is a critical cloud security fundamental.
+# RECRUITER — Highlights strict IAM hygiene and zero-trust principles.
+
+data "aws_iam_policy_document" "ssm_transit_access" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject",
+      "s3:ListBucket"
+    ]
+    resources = [
+      var.ssm_transit_bucket_arn,
+      "${var.ssm_transit_bucket_arn}/*"
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "ssm_transit_attachment" {
+  name   = "ssm-transit-bucket-access"
+  role   = aws_iam_role.ec2_role.name
+  policy = data.aws_iam_policy_document.ssm_transit_access.json
+}

@@ -14,12 +14,23 @@ module "networking" {
   private_subnet_b_cidr = "10.0.20.0/24"
 }
 
+module "ssm_transit" {
+  source = "../../modules/ssm-transit"
+
+  bucket_name = "fintrack-ansible-ssm-transit-us-east-1-rs"
+  tags = {
+    Environment = var.environment
+    Project     = "fintrack"
+  }
+}
+
 module "security" {
   source = "../../modules/security"
 
-  environment = var.environment
-  vpc_id      = module.networking.vpc_id
-  admin_ip    = var.admin_ip
+  environment            = var.environment
+  vpc_id                 = module.networking.vpc_id
+  admin_ip               = var.admin_ip
+  ssm_transit_bucket_arn = module.ssm_transit.bucket_arn
 }
 
 module "compute" {
