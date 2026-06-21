@@ -20,6 +20,14 @@ filters:
   tag:Project: fintrack
   instance-state-name: running
 
+# WHAT: Name each host by its EC2 instance ID (i-0abc...), not its DNS name.
+# WHY: The aws_ssm connection plugin calls SSM StartSession, which requires an
+#      instance ID as the target. A DNS name (ec2-1-2-3-4...) fails AWS's target
+#      validation regex. This single line is what makes SSM connectivity work.
+# ENGINEER: SSM identifies targets by instance ID, never by IP or hostname.
+hostnames:
+  - instance-id
+
 # WHAT: Automatically group instances by the 'Role' tag.
 # WHY: Allows us to target playbooks (e.g., install k3s-master only on master nodes).
 # FIX: Updated from 'tags.Role' to 'ec2_tags.Role' to resolve deprecation warning.
@@ -28,8 +36,8 @@ keyed_groups:
     prefix: role
     separator: ""
 
-# WHAT: Connect using private IP for internal traffic if applicable,
-#       or public for external access.
-# WHY: Since we are connecting from your laptop, we must use public IPs.
-compose:
-  ansible_host: public_ip_address
+# WHAT: (removed) Previously forced ansible_host to the public IP.
+# WHY REMOVED: That was a leftover from the SSH design. The aws_ssm plugin does
+#              NOT connect over IP — it tunnels to the instance ID via SSM. Forcing
+#              a public IP here conflicts with that transport, so it's deleted.
+#              Connection settings now live entirely in group_vars/all.yml.
