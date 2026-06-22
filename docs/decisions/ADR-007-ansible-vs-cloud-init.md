@@ -1,4 +1,4 @@
-# ADR-006: Ansible vs. EC2 User-Data (Cloud-Init)
+# ADR-007: Ansible vs. EC2 User-Data (Cloud-Init)
 
 ## Status
 Proposed
