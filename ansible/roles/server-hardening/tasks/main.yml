@@ -1,21 +1,37 @@
 ---
-# WHAT: Create the deploy user and copy your SSH key.
-# WHY: 'authorized_key' is the insurance policy. Without this, disabling password auth will lock you out.
-# BUSINESS: Enables secure, identity-based access.
-# ENGINEER: Uses 'authorized_key' module to ensure your public key is on the server.
+# WHAT:      Creates the deploy user that Ansible and application processes run as.
+# WHY:       A dedicated non-root user with sudo is standard least-privilege hygiene.
+#            No SSH key is distributed here — access to these instances is via AWS SSM
+#            Session Manager (SSM), which tunnels through the AWS control plane and
+#            requires no authorized_keys file and no open port 22.
+# BUSINESS:  Removes the SSH key distribution problem entirely. There are no keys to
+#            generate, rotate, or accidentally commit to a repository.
+# ENGINEER:  The user still exists and sudo still works; the only thing that changed
+#            is how the session gets established. SSM handles that at the IAM layer,
+#            not the filesystem layer.
 - name: Ensure the deploy user exists.
   ansible.builtin.user:
     name: "{{ deploy_user }}"
     shell: /bin/bash
     groups: sudo
-    append: yes
+    append: true
     password: '!'
 
-- name: Copy the local SSH public key to the server.
-  ansible.posix.authorized_key:
-    user: "{{ deploy_user }}"
-    state: present
-    key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+# WHAT:      No SSH public-key provisioning — that task was intentionally removed.
+# WHY:       Access to these instances is via AWS SSM Session Manager, not SSH.
+#            SSM tunnels a shell through the AWS control plane; no authorized_keys
+#            file is consulted and no inbound port 22 is required. Configuring one
+#            would set up an access path we deliberately don't use.
+# BUSINESS:  Fewer credentials to manage and rotate. SSM ties access to IAM identity
+#            (a role, a policy, an audit trail) rather than to a shared key file that
+#            has to be distributed, stored, and eventually leaked or forgotten.
+# ENGINEER:  Don't configure access paths you don't use — it's dead code and a failure
+#            point. The lookup('file', '~/.ssh/id_rsa.pub') was already causing playbook
+#            failures on runners that don't have that key, which is the correct signal
+#            that this task had no business being here.
+# RECRUITER: SSM-based access means no SSH keys to distribute, store, or leak.
+#            Access is granted and revoked through IAM — auditable, time-boundable,
+#            and centralised in the same place as every other AWS permission.
 
 # WHAT: Apply the hardened SSH configuration.
 # WHY: 'notify' triggers the handler we wrote in Step 2.
@@ -33,12 +49,8 @@
     policy: deny
     direction: incoming
 
-- name: Allow SSH for the management IP.
-  community.general.ufw:
-    rule: allow
-    port: '22'
-    proto: tcp
-    src: "{{ management_cidr }}"
+# Port 22 is intentionally not opened here. Access is via SSM, not SSH — consistent
+# with the AWS security group, which also has no port 22 ingress rule.
 
 - name: Allow HTTP/HTTPS traffic.
   community.general.ufw:
@@ -59,6 +71,9 @@
     value: "{{ item.value }}"
     state: present
   loop:
-    - { key: 'net.ipv4.conf.all.accept_redirects', value: '0' }
-    - { key: 'kernel.dmesg_restrict', value: '1' }
-    - { key: 'net.ipv4.ip_forward', value: '1' }
+    - key: 'net.ipv4.conf.all.accept_redirects'
+      value: '0'
+    - key: 'kernel.dmesg_restrict'
+      value: '1'
+    - key: 'net.ipv4.ip_forward'
+      value: '1'
