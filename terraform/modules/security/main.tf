@@ -3,7 +3,7 @@
 # WHY:       Servers in public subnets must be ruthlessly locked down. We drop all traffic by default and explicitly allow only what is necessary.
 # BUSINESS:  Prevents ransomware and unauthorized access to customer data.
 # ENGINEER:  Notice the IAM Role has NO AdministratorAccess. We use Least Privilege: it can only use AWS Session Manager and read a specific S3 bucket.
-# RECRUITER: Demonstrates DevSecOps maturity. Port 22 (SSH) is locked to a specific IP, not 0.0.0.0/0.
+# RECRUITER: Demonstrates DevSecOps maturity. Port 22 (SSH) is entirely absent — we access instances via AWS SSM Session Manager, so there are zero open inbound SSH ports.
 # ══════════════════════════════════════════════════════════
 
 # ---------------------------------------------------------
@@ -23,14 +23,20 @@ resource "aws_security_group" "k3s_master" {
     cidr_blocks = ["${var.admin_ip}/32"]
   }
 
-  # SSH: Only accessible from your specific IP
-  ingress {
-    description = "SSH from Admin IP"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["${var.admin_ip}/32"]
-  }
+  # WHAT:      No SSH ingress — port 22 is intentionally absent from this security group.
+  # WHY:       We connect to these instances via AWS SSM Session Manager (SSM — the AWS
+  #            service that tunnels a shell session through the AWS control plane, requiring
+  #            no open inbound port at all). Port 22 has no legitimate use here, so it's
+  #            gone rather than merely scoped.
+  # BUSINESS:  Every open port is a potential entry point to systems that hold user
+  #            financial data. Removing SSH eliminates the vector entirely rather than
+  #            trying to manage who can reach it.
+  # ENGINEER:  Least-privilege networking: if a path isn't used, it shouldn't exist.
+  #            Locking SSH to a known IP is better than 0.0.0.0/0, but removing the
+  #            rule is better still. SSM access is granted via the IAM Role below —
+  #            the firewall doesn't need to know about it at all.
+  # RECRUITER: This instance is fully operable with zero open SSH ports — not locked
+  #            to an IP, not rate-limited, just closed. Agentless SSM is the whole story.
 
   # HTTP: Open to the world (Redirects to HTTPS)
   ingress {
