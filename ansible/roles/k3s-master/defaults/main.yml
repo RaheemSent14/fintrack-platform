@@ -1,0 +1,24 @@
+---
+# WHAT: Default configuration variables for the k3s-master role.
+# WHY: Keeps filesystem paths and tunables out of task logic, so the tasks read
+#      as "what happens" and this file reads as "where/how long", the same
+#      separation the common role already uses.
+# BUSINESS: If a future k3s version moves these paths, one file changes instead
+#           of hunting through task logic.
+# ENGINEER: Variable scoping — defaults/ has the lowest precedence in Ansible,
+#           so any of these can be overridden per-environment in group_vars
+#           without touching the role itself.
+# RECRUITER: Config separated from execution, same pattern as roles/common —
+#            shows this wasn't a one-off, it's a convention I follow.
+
+# Path the k3s installer drops its binary at. Used as the idempotency check —
+# if this exists, the server is already installed and the install task skips.
+k3s_bin_path: /usr/local/bin/k3s
+
+# Path k3s (the server) writes the cluster join token to once it's ready.
+# A "node-token" is the shared secret a worker node presents to prove it's
+# allowed to join this cluster — anyone with this token can join a node.
+k3s_node_token_path: /var/lib/rancher/k3s/server/node-token
+
+# How long (seconds) to wait for the node-token file to appear before failing.
+k3s_wait_timeout: 120

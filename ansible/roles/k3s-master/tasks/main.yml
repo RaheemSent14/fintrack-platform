@@ -1,0 +1,140 @@
+---
+# WHAT: Check whether k3s is already installed on this node.
+# WHY: This single check is what makes the whole role safe to re-run. Every
+#      task below that actually changes the system is gated on this result,
+#      so running the playbook a second time is a no-op instead of a
+#      re-install (or worse, a broken cluster from two installs colliding).
+# BUSINESS: FinTrack's playbook has to be safe to run repeatedly — during
+#           incident response, someone re-running the whole playbook against
+#           a healthy node must not break it.
+# ENGINEER: 'k3s' is a lightweight, single-binary distribution of Kubernetes
+#           (the container orchestration platform) built for small clusters
+#           and edge/resource-constrained environments — it ships the API
+#           server, scheduler, and other control-plane pieces as one binary
+#           instead of a dozen separate components. We check for that binary
+#           on disk rather than trusting "did the last run report changed".
+# RECRUITER: Idempotency guards like this are the difference between a script
+#            and infrastructure-as-code you can trust in production.
+- name: Check whether the k3s binary is already installed.
+  ansible.builtin.stat:
+    path: "{{ k3s_bin_path }}"
+  register: k3s_binary_check
+
+# WHAT: Work out this node's private (VPC-internal) IP address.
+# WHY: We need this address for two things below — telling the k3s server
+#      which interface to advertise itself on, and handing it to the worker
+#      role later as the address to join. Computing it once here (instead of
+#      inline each time) keeps both usages guaranteed to agree.
+# BUSINESS: The worker must reach the master over the private VPC network,
+#           not the public internet — that's what keeps the control plane
+#           off the open internet where it'd be an attack surface.
+# ENGINEER: 'ansible_default_ipv4.address' is a fact Ansible gathers from the
+#           node itself (the IP on its default route). On an EC2 instance
+#           that resolves to the private ENI IP, not the public one — no AWS
+#           API call needed, the instance already knows its own address.
+- name: Determine this node's private IP address.
+  ansible.builtin.set_fact:
+    k3s_internal_ip: "{{ ansible_default_ipv4.address }}"
+
+# WHAT: Install the k3s server (control plane) — only if it isn't there yet.
+# WHY: We use the official get.k3s.io installer, the same one k3s's own docs
+#      recommend, rather than hand-rolling a binary download + systemd unit.
+#      The 'creates' arg is a second, cheap idempotency guard, and 'when' is
+#      the real one — belt and suspenders. 'set -o pipefail' matters here: in
+#      a plain 'curl | sh', the shell's exit code is sh's exit code, so a
+#      failed curl (bad network, GitHub rate limit) could still look like
+#      success and get silently skipped on the next run's idempotency check.
+# BUSINESS: This is the actual control-plane install — the "control plane" is
+#           the brain of the Kubernetes cluster (API server, scheduler,
+#           controller-manager, and the cluster's datastore) that the worker
+#           node will register itself with in the next role. Get this step
+#           wrong and nothing built on top of it works.
+# ENGINEER: INSTALL_K3S_EXEC passes flags straight to the k3s server process.
+#           --node-ip and --advertise-address are both pinned to the private
+#           IP so the API server identifies itself internally on the VPC
+#           network, not on any public interface.
+# RECRUITER: Binding the control plane to the private network instead of
+#            0.0.0.0-everywhere is a real production security decision, not
+#            just "get it working" — shows awareness of network exposure.
+- name: Install the k3s server (control plane) via the official installer.
+  ansible.builtin.shell: set -o pipefail && curl -sfL https://get.k3s.io | sh -
+  args:
+    executable: /bin/bash
+    creates: "{{ k3s_bin_path }}"
+  environment:
+    INSTALL_K3S_EXEC: "server --node-ip {{ k3s_internal_ip }} --advertise-address {{ k3s_internal_ip }}"
+  when: not k3s_binary_check.stat.exists
+
+# WHAT: Wait for the installer to finish writing the node-token file.
+# WHY: The install task above returns as soon as the installer script exits,
+#      but k3s starts its service asynchronously in the background — the
+#      node-token file (and a working API server) can take a few seconds to
+#      show up after that. Without this wait, the token-reading task further
+#      down could run against a file that doesn't exist yet on a fresh
+#      install and fail intermittently.
+# BUSINESS: An intermittent failure here would show up as a flaky pipeline —
+#           "just re-run it" is not an acceptable answer for infrastructure
+#           you're demonstrating as production-grade.
+# ENGINEER: wait_for polls for the file rather than sleeping a fixed guess —
+#           it returns as soon as the condition is true instead of always
+#           waiting the full timeout.
+- name: Wait for the k3s node-token file to be written.
+  ansible.builtin.wait_for:
+    path: "{{ k3s_node_token_path }}"
+    state: present
+    timeout: "{{ k3s_wait_timeout }}"
+
+# WHAT: Confirm the k3s systemd service is actually running.
+# WHY: The node-token file existing proves the server wrote its credentials,
+#      but it doesn't prove the service stayed up. This is a cheap,
+#      idempotent double-check — if it's already running, Ansible reports no
+#      change; if it crashed after writing the token, this catches it.
+# BUSINESS: Catches a "half-installed" master before the worker role tries
+#           (and fails) to join it, turning a confusing worker-side error
+#           into a clear master-side one.
+# ENGINEER: The systemd module is declarative — "make sure this is the
+#           state" — not "run this command", so re-running it is a no-op
+#           when the service is already healthy.
+- name: Confirm the k3s service is active and enabled.
+  ansible.builtin.systemd:
+    name: k3s
+    state: started
+    enabled: true
+
+# WHAT: Read the cluster join token off disk into Ansible's memory.
+# WHY: 'slurp' reads the file through the same SSM-based connection we used
+#      to run every other task here — no extra transport, no writing the
+#      token anywhere else first. It comes back base64-encoded, which is
+#      slurp's standard behaviour for any file (text or binary), so it needs
+#      decoding before use.
+# BUSINESS: This token is the cluster's admission secret — anyone holding it
+#           can join a node. Reading it straight into memory (rather than,
+#           say, copying it to a shared file or S3 bucket) means it never
+#           rests anywhere an attacker could find it after the fact.
+# ENGINEER: This task always runs (no 'when' guard) because reading a file is
+#           side-effect-free — safe to repeat on every run, install or not.
+- name: Read the k3s join token from disk.
+  ansible.builtin.slurp:
+    src: "{{ k3s_node_token_path }}"
+  register: k3s_node_token_raw
+
+# WHAT: Store the join token and master IP as facts for later use.
+# WHY: set_fact keeps this in memory for the rest of this playbook run — it
+#      is not written to a file, not persisted between runs, and not sent
+#      anywhere. Any other role executing later in the same play (like the
+#      k3s-worker role we'll add next) can reference {{ k3s_join_token }} and
+#      {{ k3s_master_ip }} directly, because Ansible facts are shared across
+#      all roles within one playbook execution.
+# BUSINESS: This is the hand-off point between "master is ready" and "worker
+#           can join" — the whole reason this role exists instead of the
+#           worker just installing k3s blind.
+# ENGINEER: 'b64decode' undoes slurp's base64 encoding; 'trim' strips the
+#           trailing newline the installer writes, so the value the worker
+#           receives is the exact token string with no whitespace surprises.
+# RECRUITER: Passing secrets host-to-host via in-memory Ansible facts instead
+#            of an intermediate file/bucket is a deliberate secret-handling
+#            choice — worth pointing out in an interview.
+- name: Store the join token and master IP as in-memory facts.
+  ansible.builtin.set_fact:
+    k3s_join_token: "{{ (k3s_node_token_raw.content | b64decode) | trim }}"
+    k3s_master_ip: "{{ k3s_internal_ip }}"
