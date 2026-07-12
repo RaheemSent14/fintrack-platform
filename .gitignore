@@ -50,3 +50,6 @@ sessionmanager-bundle/
 sessionmanager-bundle.zip
 sessionmanager-bundle/
 sessionmanager-bundle.zip
+
+# Ignore stray SSH/debug logs
+*.log
